@@ -1,4 +1,3 @@
-import Image from "next/image";
 import React, { useState, useEffect, useRef } from "react";
 
 import * as tf from "@tensorflow/tfjs";
@@ -18,14 +17,38 @@ const Prediction = () => {
   }
   async function loadModelMv() {
     console.log("Cargando modelo...");
-    const model = await tf.loadLayersModel("modelmv/model.json");
+    const model = await tf.loadGraphModel("modelmv/model.json");
     console.log("Modelo cargado...");
     return model;
   }
 
   function preprocessImage(image) {
+    
     // Cargamos la imagen en escala de grises (1 canal).
     const tensor = tf.browser.fromPixels(image).mean(2).expandDims(2);
+
+    console.log("img original " + tensor.shape);
+
+    // Cambiamos el tamaño de la imagen a 224x224
+    const resized = tf.image.resizeBilinear(tensor, [224, 224]);
+    console.log("img reshaped " + resized.shape);
+
+    const offset = tf.scalar(255.0);
+
+    // Normalizamos la imagen
+    const normalized = tf.scalar(1.0).sub(resized.div(offset));
+    console.log("img normalized " + normalized.shape);
+
+    const batched = normalized.expandDims(0);
+    console.log("img batched " + batched.shape);
+
+    return batched;
+  }
+
+  function preprocessImageMv(image) {
+    
+    // Cargamos la imagen en escala de grises (1 canal).
+    const tensor = tf.browser.fromPixels(image);
 
     console.log("img original " + tensor.shape);
 
@@ -64,16 +87,18 @@ const Prediction = () => {
 
   async function performInference(image) {
     let model;
+    let processedImage;
+
     if (switchState) {
       console.log("MobileNet");
       model = await loadModelMv();
+      processedImage = preprocessImageMv(image);
+
     } else {
       console.log("Basic Model");
       model = await loadModel();
+      processedImage = preprocessImage(image);
     }
-
-    // Preprocesa la imagen según las necesidades de tu modelo.
-    const processedImage = preprocessImage(image);
 
     // Realiza la inferencia con el modelo.
     const predictions = await model.predict(processedImage).dataSync();
@@ -81,13 +106,13 @@ const Prediction = () => {
     // Encuentra la clase con la probabilidad más alta
     const maxIndex = predictions.indexOf(Math.max.apply(null, predictions));
 
-    // Definir las clases según tu modelo
+    // Definición de clases
     const classes = ["Normal", "Tuberculosis"];
 
     console.log("Predicciones:", predictions);
     console.log("Predicción:", classes[maxIndex]);
 
-    // Puedes mostrar los resultados en el estado
+    // Mostrar resultados de predicción
     setPredictionResult("Resultado de la detección: " + classes[maxIndex]);
   }
 
